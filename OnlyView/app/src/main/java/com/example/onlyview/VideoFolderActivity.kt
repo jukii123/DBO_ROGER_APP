@@ -26,6 +26,8 @@ class VideoFolderActivity : AppCompatActivity() {
         folderName = intent.getStringExtra("folderName")
         supportActionBar?.title = folderName
 
+
+
         loadVideos()
 
         // Establecer un escuchador de clic para el botón de cambiar vista
