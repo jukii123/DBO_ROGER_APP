@@ -1,4 +1,5 @@
 package com.example.onlyview
+
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -25,8 +26,6 @@ class VideoFolderActivity : AppCompatActivity() {
 
         folderName = intent.getStringExtra("folderName")
         supportActionBar?.title = folderName
-
-
 
         loadVideos()
 
@@ -55,13 +54,29 @@ class VideoFolderActivity : AppCompatActivity() {
 
         gridView.onItemClickListener = AdapterView.OnItemClickListener { _, _, position, _ ->
             val selectedVideoUri = videoList[position]
-            val intent = Intent(this, VideoPlaybackActivity::class.java)
-            intent.putExtra("videoUri", selectedVideoUri.toString())
+            val intent = Intent(this, VideoPlaybackActivity::class.java).apply {
+                putExtra("videoList", ArrayList(videoList.map { it.toString() }))
+                putExtra("videoUri", selectedVideoUri.toString())
+                putExtra("songTitle", getVideoName(selectedVideoUri))
+            }
             startActivity(intent)
         }
     }
 
-    // Método para cambiar la vista del GridView
+    private fun getVideoName(videoUri: Uri): String {
+        var name = "Unknown"
+        val projection = arrayOf(MediaStore.Video.Media.DISPLAY_NAME)
+        contentResolver.query(videoUri, projection, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val columnIndex = cursor.getColumnIndex(MediaStore.Video.Media.DISPLAY_NAME)
+                if (columnIndex >= 0) {
+                    name = cursor.getString(columnIndex)
+                }
+            }
+        }
+        return name
+    }
+
     private fun toggleGridViewLayout() {
         // Aquí puedes implementar la lógica para cambiar la vista del GridView
         // Por ejemplo, alternar entre una cuadrícula y una lista
