@@ -6,8 +6,10 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import android.view.GestureDetector
 import android.view.Menu
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.View
 import android.view.animation.AlphaAnimation
 import android.view.animation.Animation
@@ -50,6 +52,8 @@ class VideoPlaybackActivity : AppCompatActivity() {
     private lateinit var videoList: MutableList<Uri>
     private var currentVideoIndex = 0
     private var currentVideoUri: Uri? = null // Store the current video URI
+
+    private lateinit var gestureDetector: GestureDetector
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -132,8 +136,12 @@ class VideoPlaybackActivity : AppCompatActivity() {
             true
         }
 
+        // Initialize GestureDetector
+        gestureDetector = GestureDetector(this, GestureListener())
+
         // Hide controls after inactivity
-        videoView.setOnTouchListener { _, _ ->
+        videoView.setOnTouchListener { _, event ->
+            gestureDetector.onTouchEvent(event) // Pass touch events to GestureDetector
             showControls()
             handler.removeCallbacks(hideControlsRunnable)
             handler.postDelayed(hideControlsRunnable, delayMillis)
@@ -236,46 +244,6 @@ class VideoPlaybackActivity : AppCompatActivity() {
         findViewById<View>(R.id.prevButton).startAnimation(fadeOut)
     }
 
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.menu_video_playback, menu)
-        return true
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            R.id.action_share -> {
-                shareVideo()
-                true
-            }
-            R.id.action_favorite -> {
-                toggleFavorite(item)
-                true
-            }
-            else -> super.onOptionsItemSelected(item)
-        }
-    }
-
-    private fun shareVideo() {
-        currentVideoUri?.let { uri ->
-            val intent = ShareCompat.IntentBuilder.from(this)
-                .setType("video/*")
-                .setStream(uri)
-                .setChooserTitle("Compartir video")
-                .createChooserIntent()
-                .apply {
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-            startActivity(intent)
-        }
-    }
-
-    private fun toggleFavorite(item: MenuItem) {
-        isFavorite = !isFavorite
-        val iconResId = if (isFavorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border
-        item.icon = getDrawable(iconResId)
-        // Aquí puedes guardar el estado de favorito en una base de datos o en SharedPreferences
-    }
-
     override fun onResume() {
         super.onResume()
         if (isPlaying) {
@@ -290,7 +258,68 @@ class VideoPlaybackActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        handler.removeCallbacks(updateSeekBarRunnable)
-        handler.removeCallbacks(hideControlsRunnable)
+        videoView.stopPlayback()
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.menu_video_playback, menu)
+        val favoriteItem = menu.findItem(R.id.action_favorite)
+        val favoriteIcon = if (isFavorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border
+        favoriteItem.icon = getDrawable(favoriteIcon)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_favorite -> {
+                isFavorite = !isFavorite // Toggle favorite status
+                invalidateOptionsMenu() // Refresh the menu to update the icon
+                true
+            }
+            R.id.action_share -> {
+                shareVideo()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun shareVideo() {
+        val shareIntent = ShareCompat.IntentBuilder.from(this)
+            .setType("video/*")
+            .setStream(currentVideoUri)
+            .intent
+        startActivity(Intent.createChooser(shareIntent, "Compartir video"))
+    }
+
+    private inner class GestureListener : GestureDetector.SimpleOnGestureListener() {
+        private val SWIPE_THRESHOLD = 100
+        private val SWIPE_VELOCITY_THRESHOLD = 100
+
+        override fun onFling(
+            e1: MotionEvent?,
+            e2: MotionEvent,
+            velocityX: Float,
+            velocityY: Float
+        ): Boolean {
+            e1?.let { startEvent ->
+                e2?.let { endEvent ->
+                    val diffX = endEvent.x - startEvent.x
+                    val diffY = endEvent.y - startEvent.y
+                    if (Math.abs(diffX) > Math.abs(diffY)) {
+                        // Left or Right swipe
+                        if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
+                            if (diffX > 0) {
+                                playPreviousVideo() // Swipe right -> previous video
+                            } else {
+                                playNextVideo() // Swipe left -> next video
+                            }
+                            return true
+                        }
+                    }
+                }
+            }
+            return false
+        }
     }
 }
